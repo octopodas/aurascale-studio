@@ -4,3 +4,4 @@ dist
 public/*.wasm
 public/*.mjs
 public/models/
+gallery/

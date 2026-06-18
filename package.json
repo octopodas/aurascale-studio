@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "postinstall": "cp node_modules/onnxruntime-web/dist/*.wasm public/ 2>/dev/null || true"
   },
   "dependencies": {
     "onnxruntime-web": "^1.18.0"

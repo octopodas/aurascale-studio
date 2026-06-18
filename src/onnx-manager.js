@@ -1,7 +1,7 @@
 import * as ort from 'onnxruntime-web';
 
-// WASM binaries served from the jsDelivr CDN (must match the pinned package version).
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
+// Serve WASM binaries locally from the public directory root (copied from node_modules).
+ort.env.wasm.wasmPaths = '/';
 // Multithreaded WASM only works under cross-origin isolation (COOP/COEP). Stay
 // single-threaded otherwise so the fallback path doesn't silently fail to start.
 // ponytail: raise to navigator.hardwareConcurrency by self-hosting fonts+wasm and setting COOP/COEP headers.

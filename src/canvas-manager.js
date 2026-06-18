@@ -131,6 +131,18 @@ export class CanvasManager {
     this.drawImageScaled();
   }
 
+  // Drop the current image and reset all editing state back to empty.
+  clear() {
+    this.rawImage = null;
+    this.upscaledCanvas = null;
+    this.rotation = 0;
+    this.isCropping = false;
+    this.cropRect = null;
+    this.filters = { brightness: 1, contrast: 1, saturation: 1 };
+    this.origCtx.clearRect(0, 0, this.originalCanvas.width, this.originalCanvas.height);
+    this.targetCtx.clearRect(0, 0, this.targetCanvas.width, this.targetCanvas.height);
+  }
+
   resetCanvasDimensions(w, h) {
     // Set correct dimension considering rotation
     const isRotated = (this.rotation / 90) % 2 !== 0;

@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cancelUpscaleBtn = document.getElementById('cancel-upscale-btn');
   const downloadBtn = document.getElementById('download-btn');
   const saveBtn = document.getElementById('save-btn');
+  const newBtn = document.getElementById('new-btn');
   const telemetryBadge = document.getElementById('telemetry-badge');
   const comparisonContainer = document.getElementById('comparison-container');
   const targetWrapper = document.querySelector('.target-wrapper');
@@ -182,6 +183,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     handleFile(e.dataTransfer.files[0]);
+  });
+
+  // "New" — drop the current image and return to the empty dropzone state.
+  newBtn.addEventListener('click', () => {
+    canvasManager.clear();
+    comparisonContainer.classList.add('hidden');
+    dropzone.classList.remove('mini');
+    dropzone.title = '';
+    brightnessSlider.value = 1;
+    contrastSlider.value = 1;
+    saturationSlider.value = 1;
+    cropBtn.textContent = 'Crop Mode';
+    cropBtn.classList.add('secondary-btn');
+    cropBtn.classList.remove('primary-btn');
+    downloadBtn.disabled = true;
+    saveBtn.disabled = true;
+    resetZoom();
+    currentFileName = 'image.png';
   });
 
   // AI image chat: send the current working image, load each result as the new working image.

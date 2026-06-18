@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { CanvasManager } from '../src/canvas-manager.js';
@@ -182,7 +183,7 @@ describe('CanvasManager Calculations', () => {
     
     manager.loadImage(mockImage);
     
-    expect(manager.isCropping).toBeUndefined();
+    expect(manager.isCropping).toBe(false); // constructor initializes it to false
     
     // Toggle on
     manager.toggleCrop();
@@ -202,6 +203,26 @@ describe('CanvasManager Calculations', () => {
     manager.toggleCrop();
     expect(manager.isCropping).toBe(false);
     expect(calledPerformCrop).toBe(true);
+  });
+
+  it('should clear the image and reset editing state', () => {
+    const manager = new CanvasManager(mockOriginalCanvas, mockTargetCanvas);
+    manager.loadImage({ width: 400, height: 300 });
+    manager.toggleCrop(); // sets isCropping/cropRect
+
+    let cleared = 0;
+    mockOriginalCanvas.getContext('2d').clearRect = () => { cleared++; };
+    mockTargetCanvas.getContext('2d').clearRect = () => { cleared++; };
+
+    manager.clear();
+
+    expect(manager.rawImage).toBe(null);
+    expect(manager.upscaledCanvas).toBe(null);
+    expect(manager.rotation).toBe(0);
+    expect(manager.isCropping).toBe(false);
+    expect(manager.cropRect).toBe(null);
+    expect(manager.filters).toEqual({ brightness: 1, contrast: 1, saturation: 1 });
+    expect(cleared).toBe(2); // both canvases cleared
   });
 
   it('should perform crop correctly using canvas and image', () => {

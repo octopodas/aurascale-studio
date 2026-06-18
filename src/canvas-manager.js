@@ -8,6 +8,118 @@ export class CanvasManager {
     this.rotation = 0; // Degrees (0, 90, 180, 270)
     this.filters = { brightness: 1, contrast: 1, saturation: 1 };
     this.upscaledCanvas = null; // Stores upscale buffer
+    
+    this.isCropping = false;
+    this.cropRect = null;
+    this.cropDragMode = null;
+    this.dragStart = null;
+    this.initialCropRect = null;
+    
+    this.onMouseDownBound = this.onMouseDown.bind(this);
+    this.onMouseMoveBound = this.onMouseMove.bind(this);
+    this.onMouseUpBound = this.onMouseUp.bind(this);
+    
+    this.targetCanvas.addEventListener('mousedown', this.onMouseDownBound);
+    this.targetCanvas.addEventListener('mousemove', this.onMouseMoveBound);
+    window.addEventListener('mouseup', this.onMouseUpBound);
+    
+    this.targetCanvas.addEventListener('touchstart', this.onMouseDownBound, {passive: false});
+    this.targetCanvas.addEventListener('touchmove', this.onMouseMoveBound, {passive: false});
+    window.addEventListener('touchend', this.onMouseUpBound);
+  }
+
+  getEventPos(e) {
+    const rect = this.targetCanvas.getBoundingClientRect();
+    let clientX = e.clientX, clientY = e.clientY;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    }
+    const x = (clientX - rect.left) / rect.width * this.targetCanvas.width;
+    const y = (clientY - rect.top) / rect.height * this.targetCanvas.height;
+    return { x, y, scaleX: this.targetCanvas.width / rect.width, scaleY: this.targetCanvas.height / rect.height };
+  }
+
+  getHitMode(x, y) {
+    if (!this.cropRect) return null;
+    const { x: cx, y: cy, w: cw, h: ch } = this.cropRect;
+    const t = 10 * this.targetCanvas.width / this.targetCanvas.getBoundingClientRect().width; // tolerance
+
+    const left = Math.abs(x - cx) < t;
+    const right = Math.abs(x - (cx + cw)) < t;
+    const top = Math.abs(y - cy) < t;
+    const bottom = Math.abs(y - (cy + ch)) < t;
+    
+    if (top && left) return 'nw';
+    if (top && right) return 'ne';
+    if (bottom && left) return 'sw';
+    if (bottom && right) return 'se';
+    if (top) return 'n';
+    if (bottom) return 's';
+    if (left) return 'w';
+    if (right) return 'e';
+
+    if (x > cx && x < cx + cw && y > cy && y < cy + ch) return 'move';
+    return null;
+  }
+
+  onMouseDown(e) {
+    if (!this.isCropping) return;
+    const pos = this.getEventPos(e);
+    const mode = this.getHitMode(pos.x, pos.y);
+    if (mode) {
+      e.preventDefault();
+      this.cropDragMode = mode;
+      this.dragStart = pos;
+      this.initialCropRect = { ...this.cropRect };
+    }
+  }
+
+  onMouseMove(e) {
+    if (!this.isCropping) return;
+    const pos = this.getEventPos(e);
+    
+    if (!this.cropDragMode) {
+      const mode = this.getHitMode(pos.x, pos.y);
+      let cursor = 'default';
+      if (mode === 'nw' || mode === 'se') cursor = 'nwse-resize';
+      else if (mode === 'ne' || mode === 'sw') cursor = 'nesw-resize';
+      else if (mode === 'n' || mode === 's') cursor = 'ns-resize';
+      else if (mode === 'e' || mode === 'w') cursor = 'ew-resize';
+      else if (mode === 'move') cursor = 'move';
+      this.targetCanvas.style.cursor = cursor;
+      return;
+    }
+
+    e.preventDefault();
+    const dx = pos.x - this.dragStart.x;
+    const dy = pos.y - this.dragStart.y;
+    let { x, y, w, h } = this.initialCropRect;
+
+    if (this.cropDragMode === 'move') {
+      x += dx;
+      y += dy;
+    } else {
+      if (this.cropDragMode.includes('n')) { y += dy; h -= dy; }
+      if (this.cropDragMode.includes('s')) { h += dy; }
+      if (this.cropDragMode.includes('w')) { x += dx; w -= dx; }
+      if (this.cropDragMode.includes('e')) { w += dx; }
+    }
+
+    // Constraints
+    const minSize = 20;
+    if (w < minSize) { w = minSize; if (this.cropDragMode.includes('w')) x = this.initialCropRect.x + this.initialCropRect.w - minSize; }
+    if (h < minSize) { h = minSize; if (this.cropDragMode.includes('n')) y = this.initialCropRect.y + this.initialCropRect.h - minSize; }
+    
+    x = Math.max(0, Math.min(x, this.originalCanvas.width - w));
+    y = Math.max(0, Math.min(y, this.originalCanvas.height - h));
+
+    this.cropRect = { x, y, w, h };
+    this.applyFilters();
+  }
+
+  onMouseUp() {
+    this.cropDragMode = null;
   }
 
   loadImage(imageElement) {
@@ -87,6 +199,22 @@ export class CanvasManager {
       this.targetCtx.lineWidth = 2;
       this.targetCtx.setLineDash([6, 6]);
       this.targetCtx.strokeRect(x, y, w, h);
+      this.targetCtx.setLineDash([]);
+      
+      // Corner handles
+      const hSize = 8;
+      this.targetCtx.fillStyle = 'white';
+      const drawHandle = (hx, hy) => this.targetCtx.fillRect(hx - hSize/2, hy - hSize/2, hSize, hSize);
+      drawHandle(x, y);
+      drawHandle(x + w, y);
+      drawHandle(x, y + h);
+      drawHandle(x + w, y + h);
+      
+      // Edge handles
+      drawHandle(x + w/2, y);
+      drawHandle(x + w/2, y + h);
+      drawHandle(x, y + h/2);
+      drawHandle(x + w, y + h/2);
     }
   }
 

@@ -205,9 +205,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Crop triggers
   cropBtn.addEventListener('click', () => {
     canvasManager.toggleCrop();
-    cropBtn.textContent = canvasManager.isCropping ? 'Apply Crop' : 'Crop Mode';
-    cropBtn.classList.toggle('primary-btn', canvasManager.isCropping);
-    cropBtn.classList.toggle('secondary-btn', !canvasManager.isCropping);
+    const isCropping = canvasManager.isCropping;
+    cropBtn.textContent = isCropping ? 'Apply Crop' : 'Crop Mode';
+    cropBtn.classList.toggle('primary-btn', isCropping);
+    cropBtn.classList.toggle('secondary-btn', !isCropping);
+    
+    if (isCropping) {
+      targetWrapper.style.clipPath = 'polygon(0% 0, 100% 0, 100% 100%, 0% 100%)';
+      sliderHandle.style.display = 'none';
+    } else {
+      const pos = parseFloat(sliderHandle.style.left || '50');
+      targetWrapper.style.clipPath = `polygon(${pos}% 0, 100% 0, 100% 100%, ${pos}% 100%)`;
+      sliderHandle.style.display = 'block';
+    }
   });
 
   let currentAbortController = null;

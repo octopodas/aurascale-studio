@@ -1,5 +1,6 @@
 import { CanvasManager } from './canvas-manager.js';
 import { ONNXManager } from './onnx-manager.js';
+import { initChat } from './chat.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   const dropzone = document.getElementById('dropzone');
@@ -181,6 +182,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
     handleFile(e.dataTransfer.files[0]);
+  });
+
+  // AI image chat: send the current working image, load each result as the new working image.
+  initChat({
+    getCurrentImage: () => canvasManager.rawImage ? targetCanvas.toDataURL('image/png') : null,
+    loadResult: (dataUrl) => {
+      fetch(dataUrl).then(r => r.blob()).then(blob => {
+        const f = new File([blob], `ai-${Date.now()}.png`, { type: 'image/png' });
+        handleFile(f, true); // fromGallery=true → don't re-upload as an original
+      });
+    },
   });
 
   // Slider filter triggers

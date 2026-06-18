@@ -4,7 +4,7 @@ import { listProviders, generate } from '../ai-providers.js';
 const FAKE_PNG = 'iVBORw0KGgo' + 'A'.repeat(1200); // long, base64-shaped
 
 beforeEach(() => { process.env.NANOBANANA_API_KEY = 'test-key'; });
-afterEach(() => { vi.restoreAllMocks(); delete process.env.NANOBANANA_API_KEY; });
+afterEach(() => { vi.restoreAllMocks(); delete process.env.NANOBANANA_API_KEY; delete process.env.GEMINI_API_KEY; });
 
 function mockFetch(jsonBody, ok = true, status = 200) {
   const calls = [];
@@ -41,6 +41,22 @@ describe('nano-banana adapter', () => {
   it('throws the API error message on non-ok response', async () => {
     mockFetch({ error: { message: 'quota exceeded' } }, false, 429);
     await expect(generate({ provider: 'nano-banana', model: 'm', prompt: 'x' })).rejects.toThrow('quota exceeded');
+  });
+
+  it('falls through to the next key when the first is rejected', async () => {
+    process.env.NANOBANANA_API_KEY = 'bad-key';
+    process.env.GEMINI_API_KEY = 'good-key';
+    const seen = [];
+    global.fetch = vi.fn(async (_url, opts) => {
+      const key = opts.headers['x-goog-api-key'];
+      seen.push(key);
+      if (key === 'bad-key') return { ok: false, status: 403, json: async () => ({ error: { message: 'API disabled' } }) };
+      return { ok: true, json: async () => okImage };
+    });
+    const out = await generate({ provider: 'nano-banana', model: 'm', prompt: 'x' });
+    expect(seen[0]).toBe('bad-key');
+    expect(seen).toContain('good-key');
+    expect(out.image).toBe(`data:image/png;base64,${FAKE_PNG}`);
   });
 
   it('throws when the response has no image', async () => {

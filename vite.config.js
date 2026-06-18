@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { listProviders, generate } from './ai-providers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,6 +106,28 @@ function imageApiPlugin() {
         } else {
            next();
         }
+      });
+
+      server.middlewares.use('/api/ai/providers', (req, res, next) => {
+        if (req.method !== 'GET') return next();
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(listProviders()));
+      });
+
+      server.middlewares.use('/api/ai/generate', (req, res, next) => {
+        if (req.method !== 'POST') return next();
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+          res.setHeader('Content-Type', 'application/json');
+          try {
+            const result = await generate(JSON.parse(body));
+            res.end(JSON.stringify(result));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
       });
     }
   };

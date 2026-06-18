@@ -10,11 +10,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const rotateBtn = document.getElementById('rotate-btn');
   const cropBtn = document.getElementById('crop-btn');
   const upscaleBtn = document.getElementById('upscale-btn');
+  const upscaleFactorSelect = document.getElementById('upscale-factor');
+  const progressContainer = document.getElementById('progress-container');
+  const progressBarFill = document.getElementById('progress-bar-fill');
+  const progressText = document.getElementById('progress-text');
+  const cancelUpscaleBtn = document.getElementById('cancel-upscale-btn');
   const downloadBtn = document.getElementById('download-btn');
+  const saveBtn = document.getElementById('save-btn');
   const telemetryBadge = document.getElementById('telemetry-badge');
   const comparisonContainer = document.getElementById('comparison-container');
   const targetWrapper = document.querySelector('.target-wrapper');
   const sliderHandle = document.getElementById('slider-handle');
+  const galleryTrack = document.getElementById('gallery-track');
+  const galleryCount = document.getElementById('gallery-count');
 
   const origCanvas = document.getElementById('canvas-original');
   const targetCanvas = document.getElementById('canvas-target');
@@ -22,12 +30,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const canvasManager = new CanvasManager(origCanvas, targetCanvas);
   const onnxManager = new ONNXManager();
 
-  // Init ONNX Session & Update Telemetry. If the model fails to load (e.g. bad download),
-  // keep image editing usable and surface the error instead of throwing out of DOMContentLoaded
-  // (which would leave the badge stuck on "Loading..." and the button silently disabled).
+  // Init ONNX Session & Update Telemetry.
   telemetryBadge.textContent = 'Loading AI Model...';
   try {
-    const activeEP = await onnxManager.init();
+    const scale = parseInt(upscaleFactorSelect.value, 10) || 4;
+    const activeEP = await onnxManager.init(scale);
     telemetryBadge.textContent = activeEP;
     telemetryBadge.className = 'telemetry-badge active';
     upscaleBtn.disabled = false;
@@ -37,15 +44,111 @@ document.addEventListener('DOMContentLoaded', async () => {
     telemetryBadge.className = 'telemetry-badge loading';
   }
 
+  // Handle Model Scale Change
+  upscaleFactorSelect.addEventListener('change', async () => {
+    upscaleBtn.disabled = true;
+    telemetryBadge.textContent = 'Loading AI Model...';
+    try {
+      const scale = parseInt(upscaleFactorSelect.value, 10) || 4;
+      const activeEP = await onnxManager.init(scale);
+      telemetryBadge.textContent = activeEP;
+      telemetryBadge.className = 'telemetry-badge active';
+      upscaleBtn.disabled = false;
+    } catch (err) {
+      console.error('Model init failed:', err);
+      telemetryBadge.textContent = 'AI model failed to load';
+      telemetryBadge.className = 'telemetry-badge loading';
+    }
+  });
+
+  // Gallery Logic
+  async function loadGallery() {
+    try {
+      const res = await fetch('/api/images');
+      if (res.ok) {
+        const files = await res.json();
+        galleryCount.textContent = files.length;
+        galleryTrack.innerHTML = '';
+        files.forEach(file => {
+          const div = document.createElement('div');
+          div.className = 'gallery-item';
+          const img = document.createElement('img');
+          img.src = `/gallery/${file}`;
+          img.loading = 'lazy';
+          img.title = file;
+          // allow loading image from gallery back to workspace
+          div.addEventListener('click', () => {
+            fetch(img.src).then(r => r.blob()).then(blob => {
+              const f = new File([blob], file, { type: blob.type });
+              handleFile(f, true);
+            });
+          });
+          
+          const delBtn = document.createElement('button');
+          delBtn.className = 'delete-btn';
+          delBtn.innerHTML = '&times;';
+          delBtn.title = 'Delete image';
+          delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Delete this image?')) {
+              try {
+                const res = await fetch('/api/images', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ filename: file })
+                });
+                if (res.ok) {
+                  loadGallery();
+                }
+              } catch (err) {
+                console.error('Failed to delete image:', err);
+              }
+            }
+          });
+          
+          div.appendChild(img);
+          div.appendChild(delBtn);
+          galleryTrack.appendChild(div);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load gallery:', err);
+    }
+  }
+
+  // Initial gallery load
+  loadGallery();
+
+  let currentFileName = 'image.png';
+
   // Load Image Event Handler
-  function handleFile(file) {
+  function handleFile(file, fromGallery = false) {
     if (!file || !file.type.startsWith('image/')) return;
 
+    currentFileName = file.name || 'image.png';
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+      const dataUrl = e.target.result;
+
+      if (!fromGallery) {
+        try {
+          await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: dataUrl, filename: currentFileName })
+          });
+          loadGallery();
+        } catch (err) {
+          console.error('Failed to auto-save original image:', err);
+        }
+      }
+
       const img = new Image();
       img.onload = () => {
-        dropzone.classList.add('hidden');
+        dropzone.classList.remove('hidden'); // In case there was a hidden class
+        dropzone.classList.add('mini');
+        dropzone.title = 'Upload new image';
         comparisonContainer.classList.remove('hidden');
         
         // Reset DOM Controls to match CanvasManager state
@@ -54,7 +157,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         saturationSlider.value = 1;
 
         canvasManager.loadImage(img);
+        resetZoom();
         downloadBtn.disabled = false;
+        saveBtn.disabled = false;
       };
       img.src = e.target.result;
     };
@@ -105,17 +210,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     cropBtn.classList.toggle('secondary-btn', !canvasManager.isCropping);
   });
 
+  let currentAbortController = null;
+
+  cancelUpscaleBtn.addEventListener('click', () => {
+    if (currentAbortController) {
+      currentUpscaleStatus = 'Cancelling...';
+      cancelUpscaleBtn.disabled = true;
+      currentAbortController.abort();
+    }
+  });
+
   // AI Upscale trigger
+  let currentUpscaleStatus = '';
   upscaleBtn.addEventListener('click', async () => {
     upscaleBtn.disabled = true;
     upscaleBtn.textContent = 'Upscaling...';
+    cancelUpscaleBtn.disabled = false;
+    currentAbortController = new AbortController();
+    
+    progressContainer.classList.remove('hidden');
+    progressBarFill.style.width = '0%';
+    progressText.textContent = 'Preparing...';
+
     const startTime = performance.now();
 
     try {
+      const scale = parseInt(upscaleFactorSelect.value, 10) || 4;
       const origData = canvasManager.getOriginalImageData();
       const upscaledData = await onnxManager.upscaleImage(origData, (pct, status) => {
-        upscaleBtn.textContent = `${Math.round(pct * 100)}% - ${status}`;
-      });
+        const percent = Math.round(pct * 100);
+        upscaleBtn.textContent = `${percent}% - ${status}`;
+        progressBarFill.style.width = `${percent}%`;
+        progressText.textContent = `${percent}% - ${status}`;
+      }, scale, currentAbortController.signal);
 
       canvasManager.updateTargetCanvas(upscaledData);
       
@@ -123,10 +250,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       telemetryBadge.textContent = `${onnxManager.activeEP} | Upscaled in ${duration}ms`;
     } catch (err) {
       console.error(err);
-      alert('Upscaling failed: ' + err.message);
+      if (err.message === 'Upscaling cancelled by user.') {
+        // Just hide UI elements, no alert needed
+        progressText.textContent = 'Cancelled';
+      } else {
+        alert('Upscaling failed: ' + err.message);
+      }
     } finally {
+      currentAbortController = null;
       upscaleBtn.disabled = false;
       upscaleBtn.textContent = 'Run AI Upscale';
+      
+      setTimeout(() => {
+        progressContainer.classList.add('hidden');
+        progressBarFill.style.width = '0%';
+        progressText.textContent = '';
+      }, 2000);
     }
   });
 
@@ -157,11 +296,91 @@ document.addEventListener('DOMContentLoaded', async () => {
     moveSlider(e.touches[0].clientX);
   }, { passive: false });
 
+  // Image zoom — Ctrl +/- /0 and Ctrl+wheel. Both canvases get the same transform so the
+  // before/after stays aligned; the slider clip lives on the wrapper (container coords) so it's
+  // untouched. ponytail: zoom-to-cursor only, no drag-pan — point+scroll moves the focus, which
+  // is enough to inspect detail; add drag-pan if someone actually needs it.
+  let zoom = 1, panX = 0, panY = 0;
+  const ZOOM_MIN = 1, ZOOM_MAX = 8, ZOOM_STEP = 1.15;
+
+  function applyZoom() {
+    const t = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    origCanvas.style.transform = t;
+    targetCanvas.style.transform = t;
+    comparisonContainer.style.cursor = zoom > 1 ? 'zoom-out' : 'zoom-in';
+  }
+
+  // Zoom toward a focal point (cx,cy measured from the container centre, px) so the pixel under
+  // the cursor stays put. cx=cy=0 zooms about the centre (keyboard).
+  function setZoom(next, cx = 0, cy = 0) {
+    next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+    const ratio = next / zoom;
+    panX = cx * (1 - ratio) + panX * ratio;
+    panY = cy * (1 - ratio) + panY * ratio;
+    zoom = next;
+    if (zoom === ZOOM_MIN) { panX = 0; panY = 0; } // snap back to centred fit
+    applyZoom();
+  }
+
+  function resetZoom() { zoom = 1; panX = 0; panY = 0; applyZoom(); }
+
+  comparisonContainer.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;       // leave plain scroll alone
+    e.preventDefault();           // stop the browser's page zoom
+    const rect = comparisonContainer.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top - rect.height / 2;
+    setZoom(zoom * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP), cx, cy);
+  }, { passive: false });
+
+  window.addEventListener('keydown', (e) => {
+    if (!e.ctrlKey || comparisonContainer.classList.contains('hidden')) return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); setZoom(zoom * ZOOM_STEP); }
+    else if (e.key === '-') { e.preventDefault(); setZoom(zoom / ZOOM_STEP); }
+    else if (e.key === '0') { e.preventDefault(); resetZoom(); }
+  });
+
   // Download Logic
   downloadBtn.addEventListener('click', () => {
     const link = document.createElement('a');
     link.download = 'aurascale-enhanced.png';
     link.href = targetCanvas.toDataURL('image/png');
     link.click();
+  });
+
+  // Save Logic
+  saveBtn.addEventListener('click', async () => {
+    const originalText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    
+    try {
+      const dataUrl = targetCanvas.toDataURL('image/png');
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: dataUrl,
+          filename: currentFileName
+        })
+      });
+      
+      if (res.ok) {
+        await loadGallery();
+        saveBtn.textContent = 'Saved!';
+      } else {
+        throw new Error('Server returned an error');
+      }
+    } catch (err) {
+      console.error('Failed to save image:', err);
+      alert('Failed to save image');
+    } finally {
+      setTimeout(() => {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+      }, 2000);
+    }
   });
 });

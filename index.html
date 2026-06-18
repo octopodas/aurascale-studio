@@ -48,14 +48,26 @@
             <label for="upscale-factor">Upscale Factor</label>
             <select id="upscale-factor">
               <option value="4" selected>4x Upscale (ClearReality)</option>
+              <option value="2">2x Upscale (RealPLKSR)</option>
             </select>
           </div>
           <button id="upscale-btn" class="primary-btn glow-effect" disabled>Run AI Upscale</button>
+
+          <div id="progress-container" class="progress-container hidden">
+            <div class="progress-bar-wrapper">
+              <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+              <span id="progress-text" class="progress-text" style="text-align: left;">0%</span>
+              <button id="cancel-upscale-btn" class="secondary-btn" style="padding: 4px 10px; font-size: 0.75rem;">Cancel</button>
+            </div>
+          </div>
         </section>
 
         <section class="panel-section export-panel">
           <h3>Export</h3>
           <button id="download-btn" class="action-btn" disabled>Download Image</button>
+          <button id="save-btn" class="action-btn glow-effect" disabled style="margin-top: 10px; background: var(--primary);">Save to Gallery</button>
         </section>
       </aside>
 
@@ -83,6 +95,17 @@
           <div id="slider-handle" class="slider-handle"></div>
         </div>
       </main>
+    </div>
+    
+    <!-- Gallery Bar at the bottom -->
+    <div class="gallery-bar" id="gallery-bar">
+      <div class="gallery-header">
+        <h3>Saved Images</h3>
+        <span id="gallery-count" class="gallery-count">0</span>
+      </div>
+      <div class="gallery-track" id="gallery-track">
+        <!-- Thumbnails injected here -->
+      </div>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

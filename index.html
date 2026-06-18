@@ -95,8 +95,29 @@
           <div id="slider-handle" class="slider-handle"></div>
         </div>
       </main>
+
+      <aside class="chat-pane">
+        <div class="chat-controls">
+          <h3>AI Image Chat</h3>
+          <div class="select-group">
+            <label for="chat-provider">Provider</label>
+            <select id="chat-provider"></select>
+          </div>
+          <div class="select-group">
+            <label for="chat-model">Model</label>
+            <select id="chat-model"></select>
+          </div>
+          <div id="chat-key-status" class="chat-key-status"></div>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" class="chat-input" rows="2"
+            placeholder="Describe an image to create, or how to edit the open one…"></textarea>
+          <button id="chat-send" class="primary-btn">Send</button>
+        </div>
+      </aside>
     </div>
-    
+
     <!-- Gallery Bar at the bottom -->
     <div class="gallery-bar" id="gallery-bar">
       <div class="gallery-header">

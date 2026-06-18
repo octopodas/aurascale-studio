@@ -303,6 +303,7 @@ canvas {
   cursor: ew-resize;
   z-index: 3;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  touch-action: none; /* Disable browser gestures on handle */
 }
 
 .slider-handle::after {

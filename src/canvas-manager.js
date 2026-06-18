@@ -6,11 +6,15 @@ export class CanvasManager {
     this.targetCtx = targetCanvas.getContext('2d');
     this.rawImage = null; // Store base image element
     this.rotation = 0; // Degrees (0, 90, 180, 270)
+    this.filters = { brightness: 1, contrast: 1, saturation: 1 };
+    this.upscaledCanvas = null; // Stores upscale buffer
   }
 
   loadImage(imageElement) {
     this.rawImage = imageElement;
     this.rotation = 0;
+    this.upscaledCanvas = null;
+    this.filters = { brightness: 1, contrast: 1, saturation: 1 };
     this.resetCanvasDimensions(imageElement.width, imageElement.height);
     this.drawImageScaled();
   }
@@ -42,18 +46,26 @@ export class CanvasManager {
     this.origCtx.restore();
 
     // Synchronize Target Canvas
-    this.applyFilters({ brightness: 1, contrast: 1, saturation: 1 });
+    this.applyFilters();
   }
 
-  applyFilters({ brightness, contrast, saturation }) {
+  applyFilters(filters) {
     if (!this.rawImage) return;
+    if (filters) {
+      this.filters = filters;
+    }
+    const { brightness, contrast, saturation } = this.filters;
 
     this.targetCtx.clearRect(0, 0, this.targetCanvas.width, this.targetCanvas.height);
     this.targetCtx.save();
     
     // Inject CSS properties for hardware accelerated adjustments
     this.targetCtx.filter = `brightness(${brightness}) contrast(${contrast}) saturate(${saturation})`;
-    this.targetCtx.drawImage(this.originalCanvas, 0, 0);
+    if (this.upscaledCanvas) {
+      this.targetCtx.drawImage(this.upscaledCanvas, 0, 0);
+    } else {
+      this.targetCtx.drawImage(this.originalCanvas, 0, 0);
+    }
     this.targetCtx.restore();
 
     // Draw crop overlay if cropping is active
@@ -81,6 +93,7 @@ export class CanvasManager {
   rotate90() {
     this.rotation = (this.rotation + 90) % 360;
     if (this.rawImage) {
+      this.upscaledCanvas = null;
       this.resetCanvasDimensions(this.rawImage.width, this.rawImage.height);
       this.drawImageScaled();
     }
@@ -99,6 +112,13 @@ export class CanvasManager {
     this.targetCanvas.width = imageData.width;
     this.targetCanvas.height = imageData.height;
     this.targetCtx.putImageData(imageData, 0, 0);
+
+    // Cache the upscaled pixels into a canvas source for drawImage filters
+    const doc = this.targetCanvas.ownerDocument;
+    this.upscaledCanvas = doc.createElement('canvas');
+    this.upscaledCanvas.width = imageData.width;
+    this.upscaledCanvas.height = imageData.height;
+    this.upscaledCanvas.getContext('2d').putImageData(imageData, 0, 0);
   }
 
   toggleCrop() {
@@ -116,7 +136,7 @@ export class CanvasManager {
         h: h * 0.8
       };
     }
-    this.applyFilters({ brightness: 1, contrast: 1, saturation: 1 });
+    this.applyFilters();
   }
 
   performCrop() {
@@ -134,6 +154,7 @@ export class CanvasManager {
     img.onload = () => {
       this.rawImage = img;
       this.rotation = 0;
+      this.upscaledCanvas = null;
       this.resetCanvasDimensions(w, h);
       this.drawImageScaled();
     };

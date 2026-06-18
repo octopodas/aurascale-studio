@@ -198,15 +198,17 @@ export class ONNXManager {
     tempCanvas.height = height;
     tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
 
+    // Allocate reusable canvas for tile processing outside the loop
+    const tileCanvas = document.createElement('canvas');
+    const tileCtx = tileCanvas.getContext('2d');
+
     for (let i = 0; i < tiles.length; i++) {
       const tile = tiles[i];
       onProgressCallback(i / tiles.length, `Processing Tile ${i + 1}/${tiles.length}`);
 
-      // Extract input tile pixels
-      const tileCanvas = document.createElement('canvas');
+      // Set dynamic tile canvas dimensions
       tileCanvas.width = tile.sw;
       tileCanvas.height = tile.sh;
-      const tileCtx = tileCanvas.getContext('2d');
 
       // Render image segment from tempCanvas onto tile canvas
       tileCtx.drawImage(tempCanvas, tile.sx, tile.sy, tile.sw, tile.sh, 0, 0, tile.sw, tile.sh);

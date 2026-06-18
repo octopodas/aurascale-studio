@@ -47,6 +47,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       img.onload = () => {
         dropzone.classList.add('hidden');
         comparisonContainer.classList.remove('hidden');
+        
+        // Reset DOM Controls to match CanvasManager state
+        brightnessSlider.value = 1;
+        contrastSlider.value = 1;
+        saturationSlider.value = 1;
+
         canvasManager.loadImage(img);
         downloadBtn.disabled = false;
       };
@@ -147,8 +153,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addEventListener('touchend', () => isDragging = false);
   window.addEventListener('touchmove', (e) => {
     if (!isDragging) return;
+    e.preventDefault(); // Prevent body scrolling while dragging split slider
     moveSlider(e.touches[0].clientX);
-  });
+  }, { passive: false });
 
   // Download Logic
   downloadBtn.addEventListener('click', () => {

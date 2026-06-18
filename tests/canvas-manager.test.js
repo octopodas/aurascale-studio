@@ -33,6 +33,17 @@ describe('CanvasManager Calculations', () => {
     };
     mockOriginalCanvas.getContext = () => mockContext;
     mockTargetCanvas.getContext = () => mockContext;
+
+    // Mock doc.createElement to avoid JSDOM getContext implementation missing error
+    const originalCreateElement = doc.createElement;
+    doc.createElement = function(tagName) {
+      if (tagName === 'canvas') {
+        const c = originalCreateElement.call(doc, 'canvas');
+        c.getContext = () => mockContext;
+        return c;
+      }
+      return originalCreateElement.call(doc, tagName);
+    };
   });
 
   it('should initialize and assign properties', () => {
